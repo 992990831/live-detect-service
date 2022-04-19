@@ -139,7 +139,7 @@ namespace LiveDetect.Service.Controllers
         public string GetBestImg(string filePath)
         {
             string fullPath = folder + "/" + filePath;
-            if (!Directory.Exists(fullPath))
+            if (!System.IO.File.Exists(fullPath))
             {
                 return string.Empty;
             }
