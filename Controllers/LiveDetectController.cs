@@ -14,6 +14,11 @@ namespace LiveDetect.Service.Controllers
     {
         private const string folder = "live-video";
 
+        // 百度云中开通对应服务应用的 API Key 建议开通应用的时候多选服务
+        private static String clientId = "R28VSZLeBFw1w8b3yrz67Ait";
+        // 百度云中开通对应服务应用的 Secret Key
+        private static String clientSecret = "Drzmlb7qNQfGoePWv2bptetZ2yzaRUGn";
+
         private IRepository repo;
 
         public LiveDetectController(IRepository repository)
@@ -148,6 +153,23 @@ namespace LiveDetect.Service.Controllers
             var liveVideoData = System.Text.Json.JsonSerializer.Deserialize<RecordLiveVideoData>(json);
 
             return liveVideoData.bestImg;
+        }
+
+        [HttpGet]
+        [Route("token")]
+        public string GetToken()
+        {
+            String authHost = "https://aip.baidubce.com/oauth/2.0/token";
+            HttpClient client = new HttpClient();
+            List<KeyValuePair<String, String>> paraList = new List<KeyValuePair<string, string>>();
+            paraList.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
+            paraList.Add(new KeyValuePair<string, string>("client_id", clientId));
+            paraList.Add(new KeyValuePair<string, string>("client_secret", clientSecret));
+
+            HttpResponseMessage response = client.PostAsync(authHost, new FormUrlEncodedContent(paraList)).Result;
+            String result = response.Content.ReadAsStringAsync().Result;
+            Console.WriteLine(result);
+            return result;
         }
     }
 
