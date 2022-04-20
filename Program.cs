@@ -1,13 +1,27 @@
 using LiveDetect.Service.Service;
+using LiveDetect.Service.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<CustomExceptionFilter>();
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+//builder.Services.AddCors(option =>
+//{
+//    option.AddPolicy("AllCors", builder =>
+//    {
+//        builder.AllowAnyOrigin();
+//        builder.AllowAnyHeader();
+//        builder.AllowAnyMethod();
+//    });
+//});
 
 //主入数据库访问对象
 builder.Services.AddScoped<IRepository, MySQLRepository>();
@@ -21,13 +35,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-
-
 //app.UseHttpsRedirection();
 
 //app.UseAuthorization();
 
-app.MapControllers();
 
+app.UseRouting();
+//app.UseCors("AllCors");
+
+app.MapControllers();
 app.Run();
 

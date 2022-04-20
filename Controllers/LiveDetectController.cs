@@ -10,6 +10,7 @@ namespace LiveDetect.Service.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [CustomExceptionFilter]
     public class LiveDetectController : ControllerBase
     {
         private const string folder = "live-video";
@@ -122,12 +123,21 @@ namespace LiveDetect.Service.Controllers
             return new { list = repo.GetLiveDetectsList(pageIndex, pageSize, filter), count = repo.GetUserCount(filter) };
         }
 
+        /// <summary>
+        /// 如果客户端用content-type: application/json的话，这里可以在入参中使用对象(FromBody)
+        /// 但遇到了preflight的问题，由于现在的方式，服务是host在另一个.net framework IIS服务上，所以遇到了options preflight无法处理的情况
+        /// 只能把content-type改为plain/text，这样就不能在入参中使用对象。 只能读取body再做json转换
+        /// </summary>
         [HttpPost]
         [Route("record")]
-        public void RecordLiveDetect(RecordLiveVideoData recordData)
+        //public void RecordLiveDetect([FromBody] RecordLiveVideoData recordData)
+        //public async void RecordLiveDetect([FromForm] RecordLiveVideoData recordData)
+        public void RecordLiveDetect()
         {
-            
-            if(!Directory.Exists(folder))
+            var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
+            RecordLiveVideoData recordData = System.Text.Json.JsonSerializer.Deserialize<RecordLiveVideoData>(bodyAsText);
+            Console.WriteLine(recordData.account);
+            if (!Directory.Exists(folder))
             {
                 Directory.CreateDirectory(folder);
             }
@@ -136,7 +146,7 @@ namespace LiveDetect.Service.Controllers
 
             System.IO.File.WriteAllText(folder + "/" + fileName, System.Text.Json.JsonSerializer.Serialize(recordData));
 
-            repo.AddLiveDetect(new LiveDetectModel() { Account=recordData.account, ClientId = recordData.clientId, Result = recordData.result, FilePath=fileName  });
+            repo.AddLiveDetect(new LiveDetectModel() { Account = recordData.account, ClientId = recordData.clientId, Result = recordData.result, FilePath = fileName });
         }
 
         [HttpGet]
