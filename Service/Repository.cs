@@ -18,6 +18,14 @@ namespace LiveDetect.Service.Service
         List<User> GetUserList();
 
         int GetUserCount(string filter);
+
+        List<LiveDetectConfig> GetLiveDetecConfig(int pageIndex, int pageSize, string filter);
+
+        int GetConfigCount(string filter);
+
+        void SaveConfigTerms(string merchantId, string terms);
+
+        string GetConfigTerm(string merchantId);
     }
 
     public class MySQLRepository: IRepository
@@ -80,6 +88,45 @@ namespace LiveDetect.Service.Service
             + " from minsh.livedetect as ld left join minsh.`userkeyrelation` as ur on ld.clientid = ur.merchantid "
             + " left join minsh.`user` as u on ur.userid = u.identifier "
             + filter;
+            var count = conn.QueryFirst<int>(sql);
+
+            return count;
+        }
+
+        public List<LiveDetectConfig> GetLiveDetecConfig(int pageIndex, int pageSize, string filter)
+        {
+            var configs = conn.Query<LiveDetectConfig>(string.Format("select id, merchantid, merchantname, terms, updatedat "
+                + " from minsh.`livedetect-config` "
+                + filter
+                + " order by createdat desc limit {0}, {1}", (pageIndex - 1) * pageSize, pageSize)).ToList();
+
+            return configs;
+        }
+
+        public string GetConfigTerm(string merchantId)
+        {
+            var config = conn.Query<LiveDetectConfig>("select id, merchantid, merchantname, terms, updatedat from minsh.`livedetect-config` where merchantid=@merchantId limit 1", new { merchantId }).FirstOrDefault();
+
+            if (config == null)
+            {
+                return string.Empty;
+            }
+
+            return config.terms;
+        }
+
+        public void SaveConfigTerms(string merchantId, string terms)
+        {
+            string sql = "update minsh.`livedetect-config` set terms = '" + terms + "' where merchantId='" + merchantId + "' ";
+            conn.Execute(sql);
+        }
+
+        public int GetConfigCount(string filter)
+        {
+            string sql = "select count(1) "
+                + " from minsh.`livedetect-config` "
+                + filter;
+
             var count = conn.QueryFirst<int>(sql);
 
             return count;

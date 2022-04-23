@@ -68,7 +68,10 @@ namespace LiveDetect.Service.Controllers
                 return new VerifyResponse { Success = false, Message = "Invalid encrypted account" };
             }
 
-            return new VerifyResponse { Success = true, Account = account };
+            //隐私条款
+            string terms = repo.GetConfigTerm(clientID);
+
+            return new VerifyResponse { Success = true, Account = account, Terms= terms };
         }
 
         [HttpGet]
@@ -125,6 +128,7 @@ namespace LiveDetect.Service.Controllers
 
         /// <summary>
         /// 如果客户端用content-type: application/json的话，这里可以在入参中使用对象(FromBody)
+        /// 如果contenr-type: form/url什么的， 入参使用FromForm
         /// 但遇到了preflight的问题，由于现在的方式，服务是host在另一个.net framework IIS服务上，所以遇到了options preflight无法处理的情况
         /// 只能把content-type改为plain/text，这样就不能在入参中使用对象。 只能读取body再做json转换
         /// </summary>
@@ -166,6 +170,32 @@ namespace LiveDetect.Service.Controllers
         }
 
         [HttpGet]
+        [Route("configs")]
+        public dynamic GetConfigList(int pageIndex, int pageSize, string? clientId)
+        {
+            string filter = " where 1=1 ";
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                filter += ("and merchantid='" + clientId + "'");
+            }
+
+            return new { list = repo.GetLiveDetecConfig(pageIndex, pageSize, filter), count = repo.GetConfigCount(filter) };
+
+        }
+
+        [HttpPost]
+        [Route("config")]
+        //public void RecordLiveDetect([FromBody] RecordLiveVideoData recordData)
+        //public async void RecordLiveDetect([FromForm] RecordLiveVideoData recordData)
+        public void UpdateConfig()
+        {
+            var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
+            var config = System.Text.Json.JsonSerializer.Deserialize<LiveDetectConfig>(bodyAsText);
+            Console.WriteLine(config.merchantId);
+            repo.SaveConfigTerms(config.merchantId, config.terms);
+        }
+
+        [HttpGet]
         [Route("token")]
         public string GetToken()
         {
@@ -189,6 +219,8 @@ namespace LiveDetect.Service.Controllers
         public string Message { get; set; }
 
         public string Account { get; set; }
+
+        public string Terms { get; set; }
     }
 
     public struct RecordLiveVideoData
