@@ -17,7 +17,7 @@ namespace LiveDetect.Service.Service
 
         List<User> GetUserList();
 
-        int GetUserCount(string filter);
+        int GetLiveDetectCount(string filter);
 
         List<LiveDetectConfig> GetLiveDetecConfig(int pageIndex, int pageSize, string filter);
 
@@ -26,6 +26,16 @@ namespace LiveDetect.Service.Service
         void SaveConfigTerms(string merchantId, string terms);
 
         string GetConfigTerm(string merchantId);
+
+        string GetConfigCallbackUrl(string merchantId);
+
+        void AddLiveDetectCode(LiveDetectCode model);
+
+        List<LiveDetectCode> GetLiveDetectCodeList(int pageIndex, int pageSize, string filter);
+
+        int GetCodesCount(string filter);
+
+        void UpdateConfigCallback(string merchantId, string callback);
     }
 
     public class MySQLRepository: IRepository
@@ -59,8 +69,8 @@ namespace LiveDetect.Service.Service
 
         public void AddLiveDetect(LiveDetectModel model)
         {
-            conn.Execute("insert into minsh.livedetect(ClientId, Account, FilePath, Result, CreatedAt) values(@ClientId, @Account, @FilePath, @Result, @CreatedAt)"
-                , new { ClientId= model.ClientId, Account=model.Account, FilePath= model.FilePath, Result= model.Result, CreatedAt=DateTime.Now });
+            conn.Execute("insert into minsh.livedetect(ClientId, Account, FilePath, TransId, Result, CreatedAt) values(@ClientId, @Account, @FilePath, @TransId, @Result, @CreatedAt)"
+                , new { ClientId= model.ClientId, Account=model.Account, FilePath= model.FilePath, TransId=model.TransId, Result= model.Result, CreatedAt=DateTime.Now });
 
         }
 
@@ -73,7 +83,7 @@ namespace LiveDetect.Service.Service
 
         public List<LiveDetectModel> GetLiveDetectsList(int pageIndex, int pageSize, string filter)
         {
-            var liveDetectList = conn.Query<LiveDetectModel>(String.Format("select clientid, u.`name` as clientName, account, filepath, result, createdat "
+            var liveDetectList = conn.Query<LiveDetectModel>(String.Format("select clientid, u.`name` as clientName, account, filepath, transId, result, createdat "
             + " from minsh.livedetect as ld left join minsh.`userkeyrelation` as ur on ld.clientid = ur.merchantid "
             + " left join minsh.`user` as u on ur.userid = u.identifier" 
             + filter
@@ -82,7 +92,7 @@ namespace LiveDetect.Service.Service
             return liveDetectList;
         }
 
-        public int GetUserCount(string filter)
+        public int GetLiveDetectCount(string filter)
         {
             string sql = "select count(1) "
             + " from minsh.livedetect as ld left join minsh.`userkeyrelation` as ur on ld.clientid = ur.merchantid "
@@ -95,7 +105,7 @@ namespace LiveDetect.Service.Service
 
         public List<LiveDetectConfig> GetLiveDetecConfig(int pageIndex, int pageSize, string filter)
         {
-            var configs = conn.Query<LiveDetectConfig>(string.Format("select id, merchantid, merchantname, terms, updatedat "
+            var configs = conn.Query<LiveDetectConfig>(string.Format("select id, merchantid, merchantname, terms, callback, updatedat "
                 + " from minsh.`livedetect-config` "
                 + filter
                 + " order by createdat desc limit {0}, {1}", (pageIndex - 1) * pageSize, pageSize)).ToList();
@@ -131,5 +141,56 @@ namespace LiveDetect.Service.Service
 
             return count;
         }
+
+        #region 验证码
+        public void AddLiveDetectCode(LiveDetectCode model)
+        {
+            conn.Execute("insert into minsh.`livedetect-code`(ClientId, Account, TransId, CreatedAt) values(@ClientId, @Account, @TransId, @CreatedAt)"
+                , new { ClientId = model.ClientId, Account = model.Account, TransId = model.TransId, CreatedAt = DateTime.Now });
+        }
+
+        public List<LiveDetectCode> GetLiveDetectCodeList(int pageIndex, int pageSize, string filter)
+        {
+            var liveDetectList = conn.Query<LiveDetectCode>(String.Format("select clientid, u.`name` as clientName, account, transId, createdat "
+            + " from minsh.`livedetect-code` as ld left join minsh.`userkeyrelation` as ur on ld.clientid = ur.merchantid "
+            + " left join minsh.`user` as u on ur.userid = u.identifier"
+            + filter
+            + " order by ld.createdat desc limit {0}, {1}", (pageIndex - 1) * pageSize, pageSize)).ToList();
+
+            return liveDetectList;
+        }
+
+        public int GetCodesCount(string filter)
+        {
+            string sql = "select count(1) "
+            + " from minsh.`livedetect-code` as ld left join minsh.`userkeyrelation` as ur on ld.clientid = ur.merchantid "
+            + " left join minsh.`user` as u on ur.userid = u.identifier "
+            + filter;
+            var count = conn.QueryFirst<int>(sql);
+
+            return count;
+        }
+
+        #endregion
+
+        #region 回调地址
+        public void UpdateConfigCallback(string merchantId, string callback)
+        {
+            string sql = "update minsh.`livedetect-config` set callback = '" + callback + "' where merchantId='" + merchantId + "' ";
+            conn.Execute(sql);
+        }
+
+        public string GetConfigCallbackUrl(string merchantId)
+        {
+            var config = conn.Query<LiveDetectConfig>("select id, merchantid, merchantname, terms, callback, updatedat from minsh.`livedetect-config` where merchantid=@merchantId limit 1", new { merchantId }).FirstOrDefault();
+
+            if (config == null)
+            {
+                return string.Empty;
+            }
+
+            return config.callback;
+        }
+        #endregion
     }
 }

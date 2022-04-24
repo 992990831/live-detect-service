@@ -1,6 +1,9 @@
 ﻿namespace LiveDetect.Service.Model
 {
-    public class LiveDetectModel
+    /// <summary>
+    /// 验证码使用记录
+    /// </summary>
+    public class LiveDetectCode
     {
         public int Id { get; set; }
 
@@ -16,11 +19,9 @@
 
         public string Account { get; set; }
 
-        public string FilePath { get; set; }
 
         public string TransId { get; set; }
 
-        public Boolean Result { get; set; }
 
         public DateTime CreatedAt { get; set; }
     }

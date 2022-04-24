@@ -5,6 +5,8 @@ using LiveDetect.Service.Model;
 using System.Security.Cryptography;
 using LiveDetect.Service.Common;
 using System.IO;
+using System.Net;
+using System.Text;
 
 namespace LiveDetect.Service.Controllers
 {
@@ -123,7 +125,7 @@ namespace LiveDetect.Service.Controllers
                 filter += ("and ld.createdat<='" + end + "'");
             }
 
-            return new { list = repo.GetLiveDetectsList(pageIndex, pageSize, filter), count = repo.GetUserCount(filter) };
+            return new { list = repo.GetLiveDetectsList(pageIndex, pageSize, filter), count = repo.GetLiveDetectCount(filter) };
         }
 
         /// <summary>
@@ -150,7 +152,18 @@ namespace LiveDetect.Service.Controllers
 
             System.IO.File.WriteAllText(folder + "/" + fileName, System.Text.Json.JsonSerializer.Serialize(recordData));
 
-            repo.AddLiveDetect(new LiveDetectModel() { Account = recordData.account, ClientId = recordData.clientId, Result = recordData.result, FilePath = fileName });
+            repo.AddLiveDetect(new LiveDetectModel() { Account = recordData.account, ClientId = recordData.clientId, Result = recordData.result, FilePath = fileName, TransId = recordData.transId });
+
+            Task.Factory.StartNew(() =>
+            {
+                var userKey = repo.GetUserKeys(recordData.clientId);
+                if (userKey == null)
+                    return;
+
+                string callbackUrl = repo.GetConfigCallbackUrl(recordData.clientId);
+                Console.WriteLine("clientId:" + recordData.clientId + "callback url:" + callbackUrl);
+                CallBack(callbackUrl, userKey.Key, recordData.bestImg, recordData.transId, recordData.score, recordData.result);
+            });
         }
 
         [HttpGet]
@@ -187,7 +200,7 @@ namespace LiveDetect.Service.Controllers
         [Route("config")]
         //public void RecordLiveDetect([FromBody] RecordLiveVideoData recordData)
         //public async void RecordLiveDetect([FromForm] RecordLiveVideoData recordData)
-        public void UpdateConfig()
+        public void UpdateTerms()
         {
             var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
             var config = System.Text.Json.JsonSerializer.Deserialize<LiveDetectConfig>(bodyAsText);
@@ -211,6 +224,169 @@ namespace LiveDetect.Service.Controllers
             Console.WriteLine(result);
             return result;
         }
+
+
+        #region 验证码
+        /// <summary>
+        /// 如果客户端用content-type: application/json的话，这里可以在入参中使用对象(FromBody)
+        /// 如果contenr-type: form/url什么的， 入参使用FromForm
+        /// 但遇到了preflight的问题，由于现在的方式，服务是host在另一个.net framework IIS服务上，所以遇到了options preflight无法处理的情况
+        /// 只能把content-type改为plain/text，这样就不能在入参中使用对象。 只能读取body再做json转换
+        /// </summary>
+        [HttpPost]
+        [Route("code")]
+        //public void RecordLiveDetect([FromBody] RecordLiveVideoData recordData)
+        //public async void RecordLiveDetect([FromForm] RecordLiveVideoData recordData)
+        public void RecordLiveDetectCode()
+        {
+            var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
+            RecordLiveCodeData recordData = System.Text.Json.JsonSerializer.Deserialize<RecordLiveCodeData>(bodyAsText);
+            
+            repo.AddLiveDetectCode(new LiveDetectCode() { Account = recordData.account, ClientId = recordData.clientId, TransId = recordData.transId });
+        }
+
+        [HttpGet]
+        [Route("codes")]
+        public dynamic GetCodesHistory(int pageIndex, int pageSize, string? clientId, string? start, string? end)
+        {
+            string filter = " where 1=1 ";
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                filter += ("and ur.merchantid='" + clientId + "'");
+            }
+           
+            if (!string.IsNullOrEmpty(start))
+            {
+                filter += ("and ld.createdat>='" + start + "'");
+            }
+
+            if (!string.IsNullOrEmpty(end))
+            {
+                filter += ("and ld.createdat<='" + end + "'");
+            }
+
+            return new { list = repo.GetLiveDetectCodeList(pageIndex, pageSize, filter), count = repo.GetCodesCount(filter) };
+        }
+
+        #endregion
+
+        #region 回调地址配置
+        
+        [HttpPost]
+        [Route("config/callback")]
+        //public void RecordLiveDetect([FromBody] RecordLiveVideoData recordData)
+        //public async void RecordLiveDetect([FromForm] RecordLiveVideoData recordData)
+        public void UpdateCallback()
+        {
+            var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
+            var config = System.Text.Json.JsonSerializer.Deserialize<LiveDetectConfig>(bodyAsText);
+            repo.UpdateConfigCallback(config.merchantId, config.callback);
+        }
+
+        #endregion
+
+        #region 
+        /// <summary>
+        /// 给客户发回调的接口
+        /// </summary>
+        [HttpPost]
+        [Route("client/callback")]
+        public void ClientCallback()
+        {
+            var bodyAsText = new System.IO.StreamReader(this.HttpContext.Request.Body).ReadToEndAsync().Result;
+            CallbackRequest recordData = System.Text.Json.JsonSerializer.Deserialize<CallbackRequest>(bodyAsText);
+
+            var userKey = repo.GetUserKeys(recordData.ClientId);
+            if (userKey == null)
+                return;
+
+            string key = userKey.Key;
+            string bestImg = recordData.BestImg;
+            string transId = recordData.TransId;
+            double score = recordData.Score;
+            bool result = recordData.Result;
+
+            string callbackUrl = repo.GetConfigCallbackUrl(recordData.ClientId);
+            CallBack(callbackUrl, key, bestImg, transId, score, result);
+        }
+
+        private void CallBack(string url, string key, string bestImg, string transId, double score, bool result)
+        {
+            //string key = repo.GetUserKeys(recordData.ClientId).Key;
+            //string bestImg = recordData.BestImg;
+            //string transId = recordData.TransId;
+            //double score = recordData.Score;
+            //bool result = recordData.Result;
+
+            Console.WriteLine(string.Format("callback: transId:{0}, score: {1}", transId, score));
+            Console.WriteLine(string.Format("callback: url: {0}", url));
+
+            var requestObj = new
+            {
+                transId = transId,
+                bestImage = bestImg,
+                score = score,
+                result = result
+            };
+
+            var requestStr = System.Text.Json.JsonSerializer.Serialize(requestObj);
+            byte[] binaryData = Encoding.UTF8.GetBytes(Util.EncryptString(requestStr, key));
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+
+            try
+            {
+                request.ContentType = "text/plain";
+                request.Method = "POST";
+
+                request.ContentLength = binaryData.Length;
+                request.Timeout = int.MaxValue;
+                Stream reqstream = request.GetRequestStream();
+                reqstream.Write(binaryData, 0, binaryData.Length);
+
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                Stream streamReceive = response.GetResponseStream();
+                Encoding encoding = Encoding.UTF8;
+
+                StreamReader streamReader = new StreamReader(streamReceive, encoding);
+                string strResult = streamReader.ReadToEnd();
+                //strResult = Util.Decrypt(strResult, secretKey);
+                Console.WriteLine(string.Format("callback: merchantId:{0}, result: {1}", clientId, strResult));
+                return;
+            }
+            catch (WebException webEx)
+            {
+                Stream ReceiveStream = webEx.Response.GetResponseStream();
+                Encoding encode = Encoding.GetEncoding("utf-8");
+
+                StreamReader readStream = new StreamReader(ReceiveStream, encode);
+                string str = readStream.ReadToEnd();
+                Console.WriteLine("Failed at:" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+            catch (Exception ex)
+            {
+                Console.Write("异常信息:" + ex.Message);
+            }
+            finally
+            {
+                request.Abort();
+            }
+        }
+
+        #endregion
+    }
+
+    public struct CallbackRequest
+    {
+        public string ClientId { get; set; }
+
+        public string TransId { get; set; }
+
+        public string BestImg { get; set; }
+
+        public double Score { get; set; }
+        
+        public bool Result { get; set; }
     }
 
     public struct VerifyResponse
@@ -235,6 +411,17 @@ namespace LiveDetect.Service.Controllers
 
         public float score { get; set; }
 
+        public string transId { get; set; }
+
         public Boolean result { get; set; }
+    }
+
+    public struct RecordLiveCodeData
+    {
+        public string clientId { get; set; }
+
+        public string account { get; set; }
+
+        public string transId { get; set; }
     }
 }
