@@ -318,6 +318,9 @@ namespace LiveDetect.Service.Controllers
             //double score = recordData.Score;
             //bool result = recordData.Result;
 
+            if (string.IsNullOrEmpty(url))
+                return;
+
             Console.WriteLine(string.Format("callback: transId:{0}, score: {1}", transId, score));
             Console.WriteLine(string.Format("callback: url: {0}", url));
 
@@ -329,7 +332,7 @@ namespace LiveDetect.Service.Controllers
                 result = result
             };
 
-            var requestStr = System.Text.Json.JsonSerializer.Serialize(requestObj);
+            var requestStr = Newtonsoft.Json.JsonConvert.SerializeObject(requestObj); //System.Text.Json.JsonSerializer.Serialize(requestObj, System.Text.Json.JsonSerializerOptions.);
             byte[] binaryData = Encoding.UTF8.GetBytes(Util.EncryptString(requestStr, key));
 
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
