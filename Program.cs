@@ -1,5 +1,7 @@
 using LiveDetect.Service.Service;
 using LiveDetect.Service.Common;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,8 +25,13 @@ builder.Services.AddSwaggerGen();
 //    });
 //});
 
-//Ö÷ÈëÊý¾Ý¿â·ÃÎÊ¶ÔÏó
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½ï¿½Ê¶ï¿½ï¿½ï¿½
 builder.Services.AddScoped<IRepository, MySQLRepository>();
+
+builder.Services.Configure<KestrelServerOptions>(options =>{
+    options.AllowSynchronousIO = true;
+});
+
 
 var app = builder.Build();
 
@@ -34,6 +41,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 
 //app.UseHttpsRedirection();
 
@@ -46,3 +54,4 @@ app.UseRouting();
 app.MapControllers();
 app.Run();
 
+Console.OutputEncoding = Encoding.UTF8;

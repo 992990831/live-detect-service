@@ -36,6 +36,8 @@ namespace LiveDetect.Service.Service
         int GetCodesCount(string filter);
 
         void UpdateConfigCallback(string merchantId, string callback);
+
+        void AddConsumptionHistory(ConsumptionHistory ch);
     }
 
     public class MySQLRepository: IRepository
@@ -190,6 +192,16 @@ namespace LiveDetect.Service.Service
             }
 
             return config.callback;
+        }
+
+        public void AddConsumptionHistory(ConsumptionHistory ch)
+        {
+            conn.Execute("insert into minsh.consumptionhistory(Account, ServiceID, DatasourceID, DatasourceName, Amount, Count, SuccessFlag, `Description`, `Date`, IsSecond, SecondSearchTime, LocalFilePath, KeyInfo1, KeyInfo2, KeyInfo3, Discount, RequestIP, RequestUrl)" + 
+            " values(@account, @service_id, @datasource_id, @datasource_name, @requestedAmount, @count, @v_successFlag, @v_description, now(), @v_second, @v_secondtime, @v_filePath,@v_keyinfo1,@v_keyinfo2,@v_keyinfo3,@v_discount, @v_ip, @v_url)"
+                , new { account = ch.Account, service_id = ch.ServiceType, datasource_id = ch.DatasourceId, 
+                datasource_name = ch.DatasourceName, requestedAmount = ch.Amount, count=1, v_successFlag =ch.ResponseCode,
+                v_description = ch.Description, v_second = ch.IsSecond? 1:0, v_secondtime = ch.SecondTime, v_filePath = ch.FilePath, 
+                v_keyinfo1=ch.KeyInfo1, v_keyinfo2=ch.KeyInfo2, v_keyinfo3=ch.KeyInfo3, v_discount= ch.Discount, v_ip=ch.IP, v_url=ch.RequestUrl});
         }
         #endregion
     }
